@@ -1,0 +1,5 @@
+{
+  "name": "DroneShow Visualizer",
+  "description": "An internal demo app for salespersons to generate realistic visuals of drone shows based on client specifications using AI.",
+  "requestFramePermissions": []
+}
