@@ -4,6 +4,7 @@ import { EVENT_TYPES } from './constants';
 import { describeImage, generateImage, editImage, generateVideo } from './services/geminiService';
 import DroneIcon from './components/icons/DroneIcon';
 import Loader from './components/Loader';
+import Toast, { ToastType } from './components/Toast';
 
 const initialFormData: FormData = {
   clientName: '',
@@ -33,6 +34,7 @@ const App: React.FC = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imageFileName, setImageFileName] = useState<string>('Subir imagen del lugar (opcional)');
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [loadingMessage, setLoadingMessage] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -40,11 +42,18 @@ const App: React.FC = () => {
   const [generatedImageData, setGeneratedImageData] = useState<{ url: string; base64: string; mimeType: string; } | null>(null);
   const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
   const [editPrompt, setEditPrompt] = useState<string>('');
+  const [showReveal, setShowReveal] = useState<boolean>(false);
 
   const [view, setView] = useState<'form' | 'list'>('form');
   const [clients, setClients] = useState<ClientRecord[]>([]);
   const [selectedClient, setSelectedClient] = useState<ClientRecord | null>(null);
   const [isProjectSaved, setIsProjectSaved] = useState<boolean>(false);
+
+  const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
+
+  const showToast = useCallback((message: string, type: ToastType) => {
+    setToast({ message, type });
+  }, []);
 
   useEffect(() => {
     try {
@@ -67,13 +76,27 @@ const App: React.FC = () => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 4 * 1024 * 1024) { // 4MB limit
-        setError("El archivo es demasiado grande. El límite es 4MB.");
+        showToast("El archivo es demasiado grande. El límite es 4MB.", "error");
         return;
       }
       setImageFile(file);
       setImageFileName(file.name);
+
+      // Create preview URL
+      const previewUrl = URL.createObjectURL(file);
+      setImagePreviewUrl(previewUrl);
+      showToast("Imagen cargada correctamente ✨", "success");
     }
-  }, []);
+  }, [showToast]);
+
+  const handleRemoveImage = useCallback(() => {
+    setImageFile(null);
+    setImageFileName('Subir imagen del lugar (opcional)');
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl(null);
+    }
+  }, [imagePreviewUrl]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -103,9 +126,14 @@ const App: React.FC = () => {
       const imageUrl = `data:image/jpeg;base64,${generatedImageBase64}`;
       setGeneratedImageData({ url: imageUrl, base64: generatedImageBase64, mimeType: 'image/jpeg' });
 
+      // Trigger reveal animation
+      setTimeout(() => setShowReveal(true), 100);
+      showToast("¡Visualización generada exitosamente! 🎉", "success");
+
     } catch (err) {
       const e = err as Error;
       setError(e.message || 'Ocurrió un error inesperado.');
+      showToast(e.message || 'Ocurrió un error inesperado.', "error");
     } finally {
       setIsLoading(false);
       setLoadingMessage('');
@@ -125,9 +153,11 @@ const App: React.FC = () => {
         const newUrl = `data:${newMimeType};base64,${newBase64}`;
         setGeneratedImageData({ url: newUrl, base64: newBase64, mimeType: newMimeType });
         setEditPrompt('');
+        showToast("Imagen editada correctamente ✨", "success");
     } catch (err) {
       const e = err as Error;
       setError(e.message || 'Ocurrió un error inesperado durante la edición.');
+      showToast(e.message || 'Ocurrió un error inesperado durante la edición.', "error");
     } finally {
         setIsLoading(false);
         setLoadingMessage('');
@@ -160,6 +190,7 @@ const App: React.FC = () => {
         const videoBlob = await response.blob();
         const videoUrl = URL.createObjectURL(videoBlob);
         setGeneratedVideoUrl(videoUrl);
+        showToast("¡Video generado exitosamente! 🎬", "success");
     } catch (err: any) {
         let errorMessage = 'Ocurrió un error inesperado durante la generación del video.';
         if (err.message?.includes("Requested entity was not found")) {
@@ -198,23 +229,30 @@ const App: React.FC = () => {
         const updatedClients = [...prevClients, newClient];
         try {
             localStorage.setItem('droneShowClients', JSON.stringify(updatedClients));
+            showToast("Proyecto guardado correctamente 💾", "success");
         } catch (e) {
             console.error("Failed to save client to localStorage", e);
             setError("No se pudo guardar el proyecto. El almacenamiento local puede estar lleno.");
+            showToast("No se pudo guardar el proyecto. El almacenamiento local puede estar lleno.", "error");
         }
         return updatedClients;
     });
     setIsProjectSaved(true);
-  }, [formData, generatedImageData]);
+  }, [formData, generatedImageData, showToast]);
   
   const handleReset = () => {
     setFormData(initialFormData);
     setImageFile(null);
     setImageFileName('Subir imagen del lugar (opcional)');
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewUrl(null);
+    }
     setGeneratedImageData(null);
     setGeneratedVideoUrl(null);
     setError(null);
     setIsProjectSaved(false);
+    setShowReveal(false);
   };
 
   const fieldLabels: Record<keyof FormData, string> = {
@@ -230,6 +268,7 @@ const App: React.FC = () => {
   return (
     <main className="min-h-screen w-full bg-slate-900 text-white flex flex-col items-center p-4 sm:p-6 lg:p-8 font-sans">
       {isLoading && <Loader message={loadingMessage} />}
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
       <div className="w-full max-w-5xl mx-auto">
         <header className="text-center mb-8 relative">
@@ -266,21 +305,95 @@ const App: React.FC = () => {
            <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl shadow-lg p-6 sm:p-8">
             <h2 className="text-3xl font-bold text-center mb-6 text-cyan-400">Proyectos Guardados</h2>
             {clients.length === 0 ? (
-                <p className="text-center text-slate-400">No hay proyectos guardados todavía.</p>
+                <div className="text-center py-12">
+                  <svg className="w-24 h-24 mx-auto text-slate-600 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  </svg>
+                  <p className="text-slate-400 text-lg">No hay proyectos guardados todavía.</p>
+                  <p className="text-slate-500 text-sm mt-2">Crea tu primer proyecto para verlo aquí</p>
+                </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {clients.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(client => (
-                        <div key={client.id} onClick={() => setSelectedClient(client)} className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-cyan-500 transition-all duration-300 cursor-pointer transform hover:-translate-y-1 shadow-lg hover:shadow-cyan-500/20">
-                            <img src={client.generatedImageUrl} alt={`Visualización para ${client.formData.clientName}`} className="w-full h-40 object-cover" />
+                    {clients.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map((client, index) => {
+                      const getEventBadgeColor = (eventType: EventType) => {
+                        switch(eventType) {
+                          case EventType.Boda: return 'bg-pink-500/20 text-pink-300 border-pink-500/50';
+                          case EventType.Festival: return 'bg-purple-500/20 text-purple-300 border-purple-500/50';
+                          case EventType.Corporativo: return 'bg-blue-500/20 text-blue-300 border-blue-500/50';
+                          case EventType.Concierto: return 'bg-red-500/20 text-red-300 border-red-500/50';
+                          case EventType.Politica: return 'bg-green-500/20 text-green-300 border-green-500/50';
+                          default: return 'bg-slate-500/20 text-slate-300 border-slate-500/50';
+                        }
+                      };
+
+                      const getEventIcon = (eventType: EventType) => {
+                        switch(eventType) {
+                          case EventType.Boda: return '💍';
+                          case EventType.Festival: return '🎪';
+                          case EventType.Corporativo: return '🏢';
+                          case EventType.Concierto: return '🎵';
+                          case EventType.Politica: return '🗳️';
+                          default: return '📋';
+                        }
+                      };
+
+                      return (
+                        <div
+                          key={client.id}
+                          onClick={() => setSelectedClient(client)}
+                          className="bg-slate-800 rounded-lg overflow-hidden border border-slate-700 hover:border-cyan-500 transition-all duration-300 cursor-pointer transform hover:-translate-y-2 shadow-lg hover:shadow-cyan-500/30 animate-fade-in-up"
+                          style={{ animationDelay: `${index * 100}ms` }}
+                        >
+                            <div className="relative">
+                              <img src={client.generatedImageUrl} alt={`Visualización para ${client.formData.clientName}`} className="w-full h-40 object-cover" />
+                              <div className="absolute top-2 right-2">
+                                <span className={`px-3 py-1 rounded-full text-xs font-semibold border backdrop-blur-sm ${getEventBadgeColor(client.formData.eventType)}`}>
+                                  {getEventIcon(client.formData.eventType)} {client.formData.eventType}
+                                </span>
+                              </div>
+                              {/* Gradient overlay */}
+                              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 to-transparent"></div>
+                            </div>
                             <div className="p-4">
-                                <h3 className="text-lg font-bold truncate text-white">{client.formData.clientName || 'Cliente sin nombre'}</h3>
-                                <p className="text-sm text-slate-400">{client.formData.eventType}</p>
-                                <p className="text-xs text-slate-500 mt-2">{new Date(client.createdAt).toLocaleString()}</p>
+                                <h3 className="text-lg font-bold truncate text-white mb-1">{client.formData.clientName || 'Cliente sin nombre'}</h3>
+                                <div className="flex items-center gap-2 text-sm text-slate-400 mb-2">
+                                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
+                                  </svg>
+                                  <span className="truncate">{client.formData.countryCity}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1 text-xs text-cyan-400">
+                                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                      <path d="M10 2a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 2zM10 15a.75.75 0 01.75.75v1.5a.75.75 0 01-1.5 0v-1.5A.75.75 0 0110 15zM10 7a3 3 0 100 6 3 3 0 000-6zM15.657 5.404a.75.75 0 10-1.06-1.06l-1.061 1.06a.75.75 0 001.06 1.06l1.06-1.06zM6.464 14.596a.75.75 0 10-1.06-1.06l-1.06 1.06a.75.75 0 001.06 1.06l1.06-1.06zM18 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 0118 10zM5 10a.75.75 0 01-.75.75h-1.5a.75.75 0 010-1.5h1.5A.75.75 0 015 10zM14.596 15.657a.75.75 0 001.06-1.06l-1.06-1.061a.75.75 0 10-1.06 1.06l1.06 1.06zM5.404 6.464a.75.75 0 001.06-1.06l-1.06-1.06a.75.75 0 10-1.061 1.06l1.06 1.06z" />
+                                    </svg>
+                                    <span>{client.formData.droneCount} drones</span>
+                                  </div>
+                                  <p className="text-xs text-slate-500">{new Date(client.createdAt).toLocaleDateString()}</p>
+                                </div>
                             </div>
                         </div>
-                    ))}
+                      );
+                    })}
                 </div>
             )}
+
+            <style dangerouslySetInnerHTML={{ __html: `
+              @keyframes fade-in-up {
+                from {
+                  opacity: 0;
+                  transform: translateY(20px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+              .animate-fade-in-up {
+                animation: fade-in-up 0.6s ease-out forwards;
+                opacity: 0;
+              }
+            `}} />
             </div>
         )}
 
@@ -319,10 +432,32 @@ const App: React.FC = () => {
                 <textarea id="notes" name="notes" value={formData.notes} onChange={handleInputChange} rows={2} placeholder="Detalles adicionales del cliente..." className="w-full bg-slate-700 border border-slate-600 rounded-md p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition"></textarea>
               </div>
               <div>
-                <label htmlFor="imageFile" className="w-full cursor-pointer bg-slate-700 border-2 border-dashed border-slate-600 rounded-md p-4 flex flex-col items-center justify-center hover:bg-slate-600/50 hover:border-cyan-500 transition">
-                  <span className="text-cyan-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg></span>
-                  <span className="mt-2 text-sm text-slate-300 truncate max-w-full">{imageFileName}</span>
-                </label>
+                <label className="block text-sm font-medium text-slate-300 mb-2">Imagen de referencia del lugar</label>
+                {!imagePreviewUrl ? (
+                  <label htmlFor="imageFile" className="w-full cursor-pointer bg-slate-700 border-2 border-dashed border-slate-600 rounded-md p-4 flex flex-col items-center justify-center hover:bg-slate-600/50 hover:border-cyan-500 transition">
+                    <span className="text-cyan-400"><svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg></span>
+                    <span className="mt-2 text-sm text-slate-300 truncate max-w-full">{imageFileName}</span>
+                  </label>
+                ) : (
+                  <div className="relative group">
+                    <div className="border-2 border-cyan-500 rounded-lg overflow-hidden bg-slate-800 shadow-lg shadow-cyan-500/20">
+                      <img src={imagePreviewUrl} alt="Vista previa" className="w-full h-48 object-cover" />
+                    </div>
+                    <div className="absolute inset-0 bg-slate-900/70 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <label htmlFor="imageFile" className="bg-cyan-600 hover:bg-cyan-500 text-white p-3 rounded-full cursor-pointer transition transform hover:scale-110">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                        </svg>
+                      </label>
+                      <button type="button" onClick={handleRemoveImage} className="bg-red-600 hover:bg-red-500 text-white p-3 rounded-full transition transform hover:scale-110">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
+                    <p className="mt-2 text-sm text-cyan-300 truncate">{imageFileName}</p>
+                  </div>
+                )}
                 <input type="file" id="imageFile" accept=".jpg,.jpeg,.png" onChange={handleFileChange} className="hidden" />
               </div>
               <button type="submit" disabled={isLoading} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-4 px-6 rounded-lg text-lg transition duration-300 ease-in-out transform hover:scale-105 disabled:bg-slate-600 disabled:cursor-not-allowed">
@@ -332,15 +467,29 @@ const App: React.FC = () => {
         )}
         
         {view === 'form' && generatedImageData && (
-            <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl shadow-lg p-6 sm:p-8">
-                <h2 className="text-2xl font-bold text-center mb-4 text-cyan-400">Visualización Generada</h2>
-                <div className="mb-6 border-2 border-cyan-700 rounded-lg overflow-hidden shadow-2xl bg-black">
+            <div className={`bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-xl shadow-lg p-6 sm:p-8 transition-all duration-1000 ${showReveal ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+                <h2 className="text-2xl font-bold text-center mb-4 text-cyan-400 animate-pulse">✨ Visualización Generada</h2>
+                <div className="mb-6 border-2 border-cyan-700 rounded-lg overflow-hidden shadow-2xl bg-black relative group">
+                    {/* Shimmer effect overlay */}
+                    {showReveal && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent animate-shimmer pointer-events-none z-10"></div>
+                    )}
                     {generatedVideoUrl ? (
                         <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-auto object-contain aspect-video" />
                     ) : (
-                        <img src={generatedImageData.url} alt="Drone show visualization" className="w-full h-auto object-contain"/>
+                        <img src={generatedImageData.url} alt="Drone show visualization" className={`w-full h-auto object-contain transition-all duration-1000 ${showReveal ? 'blur-0' : 'blur-xl'}`}/>
                     )}
                 </div>
+
+                <style dangerouslySetInnerHTML={{ __html: `
+                  @keyframes shimmer {
+                    0% { transform: translateX(-100%); }
+                    100% { transform: translateX(100%); }
+                  }
+                  .animate-shimmer {
+                    animation: shimmer 2s ease-in-out;
+                  }
+                `}} />
                 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                     <button onClick={handleGenerateVideo} disabled={isLoading || !!generatedVideoUrl} className="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 px-4 rounded-lg transition disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm">
