@@ -8,6 +8,15 @@ export default defineConfig(({ mode }) => {
       server: {
         port: 3000,
         host: '0.0.0.0',
+        allowedHosts: [
+          'localhost',
+          '127.0.0.1',
+          '0.0.0.0',
+          '192.168.15.80',
+          '172.18.176.1',
+          'meda-stubbled-iona.ngrok-free.dev',
+          '*.ngrok-free.dev', // Permite cualquier URL de ngrok
+        ]
       },
       plugins: [react()],
       define: {
