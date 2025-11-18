@@ -185,7 +185,8 @@ const generateDroneShowVideoPrompt = (
     effectsIntensity: string,
     includeParticles: boolean,
     includeTrails: boolean,
-    cameraMovement: string
+    cameraMovement: string,
+    transitionDescription?: string
 ): string => {
     // Contexto del negocio: empresa de espectáculos de drones
     const businessContext = `
@@ -203,6 +204,17 @@ INFORMACIÓN DEL EVENTO ACTUAL:
 - Ritmo: ${speed}
 - Intensidad de efectos: ${effectsIntensity}
 `;
+
+    const transitionNarrative = transitionDescription
+    ? `
+TRANSICIÓN SOLICITADA POR EL CLIENTE:
+- Los mismos drones ejecutan la siguiente transición coreografiada: ${transitionDescription}
+- NO aparecen aviones, fuegos artificiales ni polvo mágico.
+- El enfoque es sobrio, realista y basado únicamente en reorganizaciones de drones y cambios de color controlados.`
+    : `
+TRANSICIONES:
+- Los drones solo se reorganizan entre formaciones manteniendo un ritmo sobrio y preciso.
+- Nunca se agregan objetos externos ni efectos fantásticos.`;
 
     const speedDescriptions = {
         'slow': 'lento, pausado y elegante',
@@ -317,6 +329,14 @@ Efecto visual: ${effectsIntensityDetails[effectsIntensity]}`;
 
 ${eventPrompt}
 
+${transitionNarrative}
+
+TONO REALISTA Y SOBRIO:
+- El show debe sentirse documental y profesional, sin magia ni fantasía exagerada.
+- ÚNICAMENTE se muestran drones LED; prohíbese cualquier otro vehículo aéreo o elemento físico.
+- No existe polvo mágico, glitter ni humo artificial: la luz proviene solo de los drones.
+- Las reorganizaciones son fluidas y creíbles, como en un espectáculo real grabado en tiempo real.
+
 INSTRUCCIONES TÉCNICAS DE ANIMACIÓN:
 - La imagen de referencia muestra el lugar exacto donde ocurrirá el espectáculo. Respeta la ubicación y el contexto visual.
 - Los elementos a animar son: "${elements}" - Anima EXACTAMENTE esto, asegúrate de que sea claramente reconocible.
@@ -333,6 +353,32 @@ DETALLES VISUALES FINALES:
 - Duración: 15-30 segundos maximizando impacto visual.
 - Los drones mantienen formaciones limpias y reconocibles en todo momento.
 - El efecto final debe ser: "wow" - impactante, memorable y profesional.
+
+RESTRICCIONES CRÍTICAS - LEER CUIDADOSAMENTE:
+❌ NO INCLUIR:
+- Fuegos artificiales reales o pirotecnia
+- Explosiones físicas de ningún tipo
+- Aviones, jets, helicópteros o cualquier aeronave
+- Polvo mágico, glitter, confeti, humo de colores o partículas fantásticas
+- Láser beams o rayos de luz externos
+- Shows de luces adicionales (reflectores, spotlights, strobes)
+- Efectos de humo, niebla o fuego
+- Cualquier elemento lumínico que NO sean los drones LED
+
+✅ SOLO MOSTRAR:
+- Drones con luces LED (puntos de luz en el cielo)
+- Estelas/rastros de luz dejados por los drones (si aplica)
+- Reflejos naturales de las luces LED en superficies (agua, edificios)
+- Partículas de luz emanadas de los drones (si aplica)
+
+VELOCIDAD Y MOVIMIENTO:
+- Los movimientos deben ser LENTOS, CONTROLADOS y FLUIDOS
+- NO acelerados, NO rápidos, NO bruscos
+- Ritmo pausado y elegante, como un ballet aéreo
+- Las transiciones entre formaciones toman su tiempo (3-5 segundos mínimo)
+- Cada movimiento es deliberado y grácil
+- Los drones se mueven sincronizados pero a velocidad humana perceptible
+- Evitar movimientos que parezcan "timelapse" o video acelerado
 
 INTERPRETACIÓN DE NARRATIVAS Y TRANSICIONES ESPECIALES:
 Si los elementos incluyen frases, preguntas o anuncios (ej: "Boy or Girl?", "It's a girl!", "Yes/No", "Countdown 3-2-1!"):
@@ -368,6 +414,10 @@ const generateTransitionPrompt = (
         'dynamic': 'alternando entre lento y explosivo',
     };
 
+    const safeFirstDescription = firstImageDescription || 'Describe con precisión la primera escena según la imagen de referencia inicial.';
+    const safeSecondDescription = secondImageDescription || 'Describe claramente la segunda escena final según la imagen de referencia proporcionada.';
+    const safeTransitionDescription = transitionDescription || 'Los mismos drones cambian de color y se reorganizan lentamente en el aire.';
+
     return `
 TRANSICIÓN DE DRONES - SECUENCIA EN DOS ACTOS:
 
@@ -376,24 +426,25 @@ CONTEXTO:
 - SON LOS MISMOS DRONES que protagonizan ambas imágenes
 - NO desaparecen ni aparecen nuevos drones
 - Solo cambian de color y se reorganizan
+- El tono es sobrio, realista y profesional. Nunca agregues aviones, helicópteros ni polvo mágico.
 
 ACTO 1: PRIMERA IMAGEN
-${firstImageDescription}
+${safeFirstDescription}
 Los drones forman: ${elements}
 Aproximadamente ${droneCount} drones crean esta formación inicial.
 
 TRANSICIÓN (EL MOMENTO MÁGICO):
-${transitionDescription}
+${safeTransitionDescription}
 - Los drones NO desaparecen, se reorganizan
 - Cambian de color de manera dramática y coordinada
 - Se mueven con ritmo ${speedMap[speed]}
 - Intensidad de efectos: ${effectsIntensity}
-- Los parpadeos, explosiones de luz y cambios de color son el punto focal
+- Destellos controlados y cambios de color sutiles son el punto focal (sin pirotecnia ni polvo)
 - Duración de la transición: 3-5 segundos máximo
 
 ACTO 2: SEGUNDA IMAGEN
 Después de la transición espectacular, los MISMOS drones forman la nueva configuración:
-${secondImageDescription}
+${safeSecondDescription}
 - Mantienen el color/patrón de luz de la transición
 - Se posicionan en la nueva formación
 - La cámara revelan la belleza de la nueva composición
@@ -405,6 +456,32 @@ DETALLES CRÍTICOS:
 - ENERGÍA: La transición es el momento de máximo impacto emocional
 - CLARIDAD: Ambas formaciones deben ser claramente reconocibles
 - CINEMATOGRAFÍA: Transiciones suaves en actos, pero la reorganización es dramática
+
+RESTRICCIONES CRÍTICAS - SOLO DRONES:
+❌ NO INCLUIR EN EL VIDEO:
+- Fuegos artificiales, pirotecnia o explosiones reales
+- Aviones, jets, helicópteros u otros objetos voladores
+- Polvo mágico, glitter, confeti o humo de colores
+- Láser beams, rayos de luz externos o efectos de iluminación escénica
+- Shows de luces adicionales (reflectores, strobes, spotlights)
+- Efectos de humo, niebla, fuego o partículas que no provengan de los drones
+- Cualquier elemento lumínico externo que no sea un drone LED
+
+✅ SOLO PERMITIDO:
+- Drones con luces LED (puntos luminosos individuales)
+- Estelas de luz dejadas por los drones en movimiento
+- Reflejos naturales de las luces LED
+- Cambios de color en los LEDs de los drones
+
+VELOCIDAD Y MOVIMIENTO (MUY IMPORTANTE):
+- Los movimientos deben ser LENTOS, PAUSADOS y CONTROLADOS
+- NO acelerados, NO rápidos, NO movimientos bruscos
+- Ritmo LENTO y elegante durante todo el video
+- Las transiciones toman su tiempo: 3-5 segundos MÍNIMO
+- Cada movimiento es deliberado, suave y observable
+- Los drones se mueven sincronizados pero a velocidad LENTA y perceptible
+- NUNCA movimientos que parezcan timelapse o video acelerado
+- Durante la transición: reorganización PAUSADA aunque visualmente impactante
 `;
 };
 
@@ -478,7 +555,8 @@ export const generateVideo = async (
     droneCount?: string,
     videoConfig?: VideoConfig,
     secondImageData?: { base64: string; mimeType: string } | null,
-    transitionDescription?: string
+    transitionDescription?: string,
+    sceneDescriptions?: { first?: string; second?: string }
 ): Promise<string> => {
     // Usar la instancia de AI con la clave correcta (ya sea de .env o AI Studio)
     const videoAI = getAIInstance();
@@ -502,9 +580,11 @@ export const generateVideo = async (
         
         // Si hay transición, usar prompt especializado
         if (secondImageData && transitionDescription) {
+            const firstScene = sceneDescriptions?.first || 'Describe con precisión la escena inicial usando la primera imagen proporcionada.';
+            const secondScene = sceneDescriptions?.second || 'Describe detalladamente la escena final usando la segunda imagen proporcionada.';
             videoPrompt = generateTransitionPrompt(
-                "Primera imagen: referencia visual inicial donde los drones forman la primera figura",
-                "Segunda imagen: referencia visual final donde los drones forman la segunda figura después de la transición",
+                firstScene,
+                secondScene,
                 transitionDescription,
                 elements || "",
                 droneCount || "100",
@@ -523,14 +603,15 @@ export const generateVideo = async (
                 finalConfig.effectsIntensity,
                 finalConfig.includeParticles,
                 finalConfig.includeTrails,
-                finalConfig.cameraMovement
+                finalConfig.cameraMovement,
+                transitionDescription
             );
         } else {
             videoPrompt = 'Animate this drone show, making the lights twinkle and move smoothly across the sky, creating a magical and dynamic visual.';
         }
 
-        // Negative prompt para evitar artefactos comunes
-        const negativePrompt = 'low quality, blurry, pixelated, distorted, watermark, text, logo, artifacts, flickering, jumpy motion, unnatural colors';
+        // Negative prompt para evitar artefactos comunes y elementos no deseados
+        const negativePrompt = 'low quality, blurry, pixelated, distorted, watermark, text, logo, artifacts, flickering, jumpy motion, unnatural colors, fireworks, pyrotechnics, explosions, laser beams, spotlights, strobes, stage lights, external lighting, smoke, fog, fire, airplanes, airplane, aircraft, jet, jets, helicopter, helicopters, plane, powder, magic powder, fairy dust, glitter, confetti, colored smoke, fast motion, sped up, timelapse, rapid movements, jerky motion, accelerated video';
 
         // Preparar request - si hay segunda imagen para transición, incluirla
         const generateVideoRequest: any = {

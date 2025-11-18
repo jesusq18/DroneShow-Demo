@@ -32,6 +32,36 @@ const fileToBase64 = (file: File): Promise<{ mimeType: string; data: string }> =
   });
 };
 
+const blobToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      const base64 = result.split(',')[1];
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(blob);
+  });
+};
+
+const buildDataUrl = (base64: string, mimeType: string) => `data:${mimeType};base64,${base64}`;
+
+const buildFirstSceneDescription = (data: FormData): string => {
+  const base = `Escena inicial con aproximadamente ${data.droneCount} drones LED formando ${data.elements || 'la composición solicitada'} sobre ${data.location || 'el lugar indicado'} en ${data.countryCity || 'la ciudad del evento'}.`;
+  const tone = 'Las luces son sobrias, controladas y realistas, sin efectos fantasiosos.';
+  const transition = data.hasTransition && data.transitionDescription
+    ? `La transición solicitada por el cliente consiste en: ${data.transitionDescription}.`
+    : '';
+  return [base, tone, transition].filter(Boolean).join(' ');
+};
+
+const buildFileSlug = (value?: string, fallback = 'drone-show') => {
+  const base = (value || fallback).trim().toLowerCase();
+  const slug = base.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+  return slug || fallback;
+};
+
 const App: React.FC = () => {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -48,7 +78,7 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const [generatedImageData, setGeneratedImageData] = useState<{ url: string; base64: string; mimeType: string; } | null>(null);
-  const [generatedVideoUrl, setGeneratedVideoUrl] = useState<string | null>(null);
+  const [generatedVideoData, setGeneratedVideoData] = useState<{ url: string; base64: string; mimeType: string } | null>(null);
   const [editPrompt, setEditPrompt] = useState<string>('');
   const [showReveal, setShowReveal] = useState<boolean>(false);
   const [imageVersions, setImageVersions] = useState<ImageVersion[]>([]);
@@ -152,7 +182,7 @@ const App: React.FC = () => {
       setLoadingMessage('Construyendo el show de drones...');
       let prompt = `Fotografía hiperrealista y profesional de un SHOW NOCTURNO DE DRONES para un evento ${formData.eventType.toLowerCase()} en ${formData.location}, ${formData.countryCity}. 
 
-El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se utilizan aproximadamente ${formData.droneCount} drones con luces LED de colores vibrantes.`;
+    El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se utilizan aproximadamente ${formData.droneCount} drones con luces LED de colores vibrantes. El resultado debe sentirse real y sobrio, como una captura documental.`;
       
       if (imageDescription) {
         prompt += ` El entorno del evento se describe así (usar como referencia visual): ${imageDescription}.`;
@@ -163,8 +193,14 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
       if (formData.notes) {
         prompt += ` Detalles adicionales del cliente: ${formData.notes}.`;
       }
+
+      if (formData.hasTransition && formData.transitionDescription) {
+        prompt += ` Los mismos drones ejecutan una transición sobria y realista: ${formData.transitionDescription}.`;
+      } else {
+        prompt += ' Los drones se reorganizan lentamente con disciplina militar y cambios de color controlados.';
+      }
       
-      prompt += ' La imagen debe tener la calidad de una cámara profesional, con las luces de los drones perfectamente definidas, estelas de luz sutiles y reflejos realistas en superficies cercanas si las hubiera (como agua o edificios). La atmósfera debe ser mágica e impactante. Capturada en horario nocturno con iluminación profesional.';
+      prompt += ' La imagen debe tener la calidad de una cámara profesional, con las luces de los drones perfectamente definidas, estelas de luz sutiles y reflejos realistas en superficies cercanas si las hubiera (como agua o edificios). Mantén un estilo sobrio y realista: sin fuegos artificiales, sin aviones ni polvo mágico; únicamente drones LED reorganizándose con precisión.';
       
       const generatedImageBase64 = await generateImage(prompt);
       const imageUrl = `data:image/jpeg;base64,${generatedImageBase64}`;
@@ -287,36 +323,62 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
     setError(null);
     setLoadingMessage('Generando video... Esto puede tardar varios minutos.');
     setIsLoading(true);
+    if (generatedVideoData?.url) {
+      URL.revokeObjectURL(generatedVideoData.url);
+    }
+    setGeneratedVideoData(null);
 
     try {
-        // Preparar datos de transición si existen
-        let secondImageData: { base64: string; mimeType: string } | null = null;
+      // Preparar datos de transición si existen
+      let secondImageData: { base64: string; mimeType: string } | null = null;
+      let secondImageDescription = '';
+      let firstSceneDescription = '';
         
-        if (formData.hasTransition && secondImageFile) {
-            setLoadingMessage('Procesando segunda imagen para transición...');
-            const { mimeType, data } = await fileToBase64(secondImageFile);
-            secondImageData = { base64: data, mimeType };
-        }
+      if (formData.hasTransition) {
+        firstSceneDescription = buildFirstSceneDescription(formData);
+      }
 
-        // Pasar datos contextuales para mejorar el prompt del video
-        const downloadLink = await generateVideo(
-            generatedImageData.base64, 
-            generatedImageData.mimeType,
-            formData.eventType,
-            formData.elements,
-            formData.location,
-            formData.droneCount,
-            undefined, // videoConfig
-            secondImageData,
-            formData.transitionDescription
-        );
+      if (formData.hasTransition && secondImageFile) {
+        setLoadingMessage('Procesando segunda imagen para transición...');
+        const { mimeType, data } = await fileToBase64(secondImageFile);
+        secondImageData = { base64: data, mimeType };
+        setLoadingMessage('Analizando la segunda escena de transición...');
+        try {
+          secondImageDescription = await describeImage(data, mimeType);
+        } catch (analysisError) {
+          console.warn('No se pudo describir la segunda imagen', analysisError);
+        }
+      }
+
+      const sceneDescriptions = formData.hasTransition
+        ? {
+          first: firstSceneDescription,
+          second: secondImageDescription,
+        }
+        : undefined;
+
+      // Pasar datos contextuales para mejorar el prompt del video
+      const downloadLink = await generateVideo(
+        generatedImageData.base64, 
+        generatedImageData.mimeType,
+        formData.eventType,
+        formData.elements,
+        formData.location,
+        formData.droneCount,
+        undefined, // videoConfig
+        secondImageData,
+        formData.transitionDescription,
+        sceneDescriptions
+      );
         setLoadingMessage('Descargando video generado...');
         const apiKey = import.meta.env.VITE_API_KEY || (window as any).__GEMINI_API_KEY__;
         const response = await fetch(`${downloadLink}&key=${apiKey}`);
         if (!response.ok) throw new Error(`Error al descargar el video: ${response.statusText}`);
         const videoBlob = await response.blob();
-        const videoUrl = URL.createObjectURL(videoBlob);
-        setGeneratedVideoUrl(videoUrl);
+      const videoUrl = URL.createObjectURL(videoBlob);
+      const videoBase64 = await blobToBase64(videoBlob);
+      const mimeType = videoBlob.type || 'video/mp4';
+      setGeneratedVideoData({ url: videoUrl, base64: videoBase64, mimeType });
         showToast("¡Video generado exitosamente! 🎬", "success");
     } catch (err: any) {
         let errorMessage = 'Ocurrió un error inesperado durante la generación del video.';
@@ -347,10 +409,12 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
   const handleSaveProject = useCallback(() => {
     if (!generatedImageData) return;
     const newClient: ClientRecord = {
-        id: new Date().toISOString() + Math.random(),
-        createdAt: new Date().toISOString(),
-        formData: { ...formData },
-        generatedImageUrl: generatedImageData.url,
+      id: new Date().toISOString() + Math.random(),
+      createdAt: new Date().toISOString(),
+      formData: { ...formData },
+      generatedImageUrl: generatedImageData.url,
+      generatedVideoBase64: generatedVideoData?.base64,
+      generatedVideoMimeType: generatedVideoData?.mimeType,
     };
     setClients(prevClients => {
         const updatedClients = [...prevClients, newClient];
@@ -365,7 +429,7 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
         return updatedClients;
     });
     setIsProjectSaved(true);
-  }, [formData, generatedImageData, showToast]);
+  }, [formData, generatedImageData, generatedVideoData, showToast]);
   
   const handleReset = () => {
     setFormData(initialFormData);
@@ -383,7 +447,10 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
       setSecondImagePreviewUrl(null);
     }
     setGeneratedImageData(null);
-    setGeneratedVideoUrl(null);
+    if (generatedVideoData?.url) {
+      URL.revokeObjectURL(generatedVideoData.url);
+    }
+    setGeneratedVideoData(null);
     setError(null);
     setIsProjectSaved(false);
     setShowReveal(false);
@@ -511,6 +578,8 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
                         }
                       };
 
+                      const clientSlug = buildFileSlug(client.formData.clientName);
+
                       return (
                         <div
                           key={client.id}
@@ -550,6 +619,32 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
                                     <span>{client.formData.droneCount} drones</span>
                                   </div>
                                   <p className="text-xs text-slate-500 font-medium">{new Date(client.createdAt).toLocaleDateString('es-ES', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                                </div>
+
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDownload(client.generatedImageUrl, `${clientSlug}-visual.jpeg`);
+                                    }}
+                                    className="flex-1 min-w-[120px] text-xs bg-slate-700/60 hover:bg-slate-600 text-white py-2 px-3 rounded-lg border border-slate-600/60 transition"
+                                  >
+                                    Guardar imagen
+                                  </button>
+                                  {client.generatedVideoBase64 && client.generatedVideoMimeType && (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDownload(
+                                          buildDataUrl(client.generatedVideoBase64, client.generatedVideoMimeType),
+                                          `${clientSlug}-show.mp4`
+                                        );
+                                      }}
+                                      className="flex-1 min-w-[120px] text-xs bg-slate-700/60 hover:bg-slate-600 text-white py-2 px-3 rounded-lg border border-slate-600/60 transition"
+                                    >
+                                      Guardar video
+                                    </button>
+                                  )}
                                 </div>
                             </div>
                         </div>
@@ -640,7 +735,7 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
                   </div>
                   <div>
                     <label htmlFor="elements" className="block text-sm font-semibold text-slate-300 mb-2">Elementos o figuras deseadas</label>
-                    <textarea id="elements" name="elements" value={formData.elements} onChange={handleInputChange} required rows={3} placeholder="Ej: Logo de la marca, un corazón, fuegos artificiales" className="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg p-3 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition backdrop-blur-sm hover:border-slate-600 text-white placeholder-slate-500"></textarea>
+                    <textarea id="elements" name="elements" value={formData.elements} onChange={handleInputChange} required rows={3} placeholder="Ej: Logo de la marca, un corazón, una constelación minimalista" className="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg p-3 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition backdrop-blur-sm hover:border-slate-600 text-white placeholder-slate-500"></textarea>
                   </div>
                 </div>
               </div>
@@ -723,19 +818,51 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
 
                   {formData.hasTransition && (
                     <div className="space-y-4 pt-4 border-t border-slate-700">
-                      <p className="text-sm text-slate-400">Los drones de la primera figura cambiarán de color y se reorganizarán para formar la segunda figura.</p>
+                      {/* Info box con recomendaciones */}
+                      <div className="bg-cyan-900/20 border border-cyan-700/40 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-cyan-400 flex-shrink-0 mt-0.5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                          </svg>
+                          <div>
+                            <p className="text-cyan-300 font-semibold text-sm mb-2">💡 ¿Cómo funciona la transición?</p>
+                            <p className="text-slate-300 text-xs mb-3">Los <strong>mismos drones</strong> se reorganizan y cambian de color. No desaparecen ni aparecen nuevos drones.</p>
+                            
+                            <p className="text-cyan-300 font-semibold text-xs mb-1.5">✅ Recomendado (transiciones normales):</p>
+                            <ul className="text-slate-300 text-xs space-y-1 list-disc list-inside mb-3">
+                              <li>"Los drones azules se reorganizan y cambian a color rosa"</li>
+                              <li>"Cambio de blanco a dorado con parpadeos suaves"</li>
+                              <li>"De formación dispersa a concentrada, manteniendo color púrpura"</li>
+                              <li>"Transición rápida: rojo → naranja → amarillo mientras se mueven"</li>
+                            </ul>
+
+                            <p className="text-amber-300 font-semibold text-xs mb-1.5">⚠️ Evitar (demasiado complejo):</p>
+                            <ul className="text-slate-400 text-xs space-y-1 list-disc list-inside">
+                              <li className="line-through opacity-60">"Los drones explotan y aparecen nuevos drones"</li>
+                              <li className="line-through opacity-60">"Desaparecen y reaparecen en otro lugar"</li>
+                              <li className="line-through opacity-60">"Se dividen en múltiples grupos diferentes"</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
                       
                       <div>
-                        <label htmlFor="transitionDescription" className="block text-sm font-semibold text-slate-300 mb-2">Describe la transición (ej: "De azul a rosa con explosión de luces")</label>
+                        <label htmlFor="transitionDescription" className="block text-sm font-semibold text-slate-300 mb-2">
+                          Describe la transición 
+                          <span className="text-xs text-slate-400 font-normal ml-2">(Reorganización + Cambio de color)</span>
+                        </label>
                         <textarea 
                           id="transitionDescription" 
                           name="transitionDescription" 
                           value={formData.transitionDescription || ''} 
                           onChange={handleInputChange} 
-                          rows={2} 
-                          placeholder="Ej: Los drones azules explotan en todas direcciones, parpadean, y regresan formando un corazón en rosa pálido"
-                          className="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition backdrop-blur-sm hover:border-slate-600 text-white placeholder-slate-500"
+                          rows={3} 
+                          placeholder="Ej: Los drones se dispersan ligeramente con parpadeos, cambian de azul intenso a rosa pálido, y se reorganizan formando un corazón más grande"
+                          className="w-full bg-slate-700/50 border border-slate-600/50 rounded-lg p-3 focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition backdrop-blur-sm hover:border-slate-600 text-white placeholder-slate-500 text-sm"
                         />
+                        <p className="text-xs text-slate-400 mt-2">
+                          <strong>Tip:</strong> Describe solo el movimiento y cambio de color. Los drones siempre serán visibles.
+                        </p>
                       </div>
 
                       <div>
@@ -821,8 +948,8 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
                         {/* Gradient overlay for light effect */}
                         <div className="absolute inset-0 bg-gradient-to-t from-slate-900/30 via-transparent to-slate-900/20 pointer-events-none z-20"></div>
                         
-                        {generatedVideoUrl ? (
-                            <video src={generatedVideoUrl} controls autoPlay loop className="w-full h-auto object-contain aspect-video" />
+                        {generatedVideoData ? (
+                          <video src={generatedVideoData.url} controls autoPlay loop className="w-full h-auto object-contain aspect-video" />
                         ) : (
                             <img src={generatedImageData.url} alt="Drone show visualization" className={`w-full h-auto object-contain transition-all duration-1000 ${showReveal ? 'blur-0 drop-shadow-2xl' : 'blur-xl'}`}/>
                         )}
@@ -837,16 +964,16 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
 
                 {/* Action Buttons Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-                    <button onClick={handleGenerateVideoClick} disabled={isLoading || !!generatedVideoUrl} className="relative group bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transform hover:scale-110 hover:shadow-lg hover:shadow-blue-500/50 disabled:hover:scale-100 disabled:hover:shadow-none uppercase tracking-wider">
+                    <button onClick={handleGenerateVideoClick} disabled={isLoading || !!generatedVideoData} className="relative group bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transform hover:scale-110 hover:shadow-lg hover:shadow-blue-500/50 disabled:hover:scale-100 disabled:hover:shadow-none uppercase tracking-wider">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 001.553.832l3-2a1 1 0 000-1.664l-3-2z" /></svg>
-                        <span className="hidden sm:inline">{generatedVideoUrl ? 'Video ✓' : 'Video'}</span>
+                      <span className="hidden sm:inline">{generatedVideoData ? 'Video ✓' : 'Video'}</span>
                     </button>
-                    <button onClick={() => handleDownload(generatedImageData.url, 'drone-show.jpeg')} disabled={isLoading} className="relative group bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transform hover:scale-110 hover:shadow-lg hover:shadow-teal-500/50 disabled:hover:scale-100 disabled:hover:shadow-none uppercase tracking-wider">
+                    <button onClick={() => handleDownload(generatedImageData.url, `${buildFileSlug(formData.clientName)}-visual.jpeg`)} disabled={isLoading} className="relative group bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transform hover:scale-110 hover:shadow-lg hover:shadow-teal-500/50 disabled:hover:scale-100 disabled:hover:shadow-none uppercase tracking-wider">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                         <span className="hidden sm:inline">Imagen</span>
                     </button>
-                    {generatedVideoUrl ? (
-                        <button onClick={() => handleDownload(generatedVideoUrl, 'drone-show.mp4')} disabled={isLoading} className="relative group bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transform hover:scale-110 hover:shadow-lg hover:shadow-teal-500/50 disabled:hover:scale-100 disabled:hover:shadow-none uppercase tracking-wider">
+                    {generatedVideoData ? (
+                        <button onClick={() => handleDownload(buildDataUrl(generatedVideoData.base64, generatedVideoData.mimeType), `${buildFileSlug(formData.clientName)}-show.mp4`)} disabled={isLoading} className="relative group bg-gradient-to-r from-teal-600 to-emerald-500 hover:from-teal-500 hover:to-emerald-400 text-white font-bold py-3 px-4 rounded-xl transition-all disabled:bg-slate-600 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm transform hover:scale-110 hover:shadow-lg hover:shadow-teal-500/50 disabled:hover:scale-100 disabled:hover:shadow-none uppercase tracking-wider">
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
                           <span className="hidden sm:inline">Video</span>
                         </button>
@@ -857,7 +984,7 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
                     </button>
                 </div>
 
-                {!generatedVideoUrl && (
+                {!generatedVideoData && (
                   <form onSubmit={handleEditSubmit} className="space-y-4 mb-8 bg-slate-800/30 p-6 rounded-xl border border-slate-700/30">
                       <label htmlFor="editPrompt" className="block text-sm font-semibold text-slate-300">¿Quieres hacer un cambio? Describe tu edición:</label>
                       <div className="flex flex-col sm:flex-row gap-4">
@@ -956,6 +1083,35 @@ El show debe formar las siguientes figuras en el cielo: ${formData.elements}. Se
                         <div>
                             <h3 className="text-xl font-semibold mb-4 text-white">Visualización</h3>
                             <img src={selectedClient.generatedImageUrl} alt="Visualización generada" className="rounded-lg border border-slate-600 w-full" />
+                            {selectedClient.generatedVideoBase64 && selectedClient.generatedVideoMimeType && (
+                              <video
+                                src={buildDataUrl(selectedClient.generatedVideoBase64, selectedClient.generatedVideoMimeType)}
+                                controls
+                                className="mt-4 rounded-lg border border-slate-600 w-full"
+                              />
+                            )}
+                            <div className="mt-4 bg-slate-700/30 border border-slate-600/40 rounded-xl p-4 flex flex-wrap gap-3">
+                              <button
+                                onClick={() => handleDownload(
+                                  selectedClient.generatedImageUrl,
+                                  `${buildFileSlug(selectedClient.formData.clientName)}-visual.jpeg`
+                                )}
+                                className="flex-1 min-w-[150px] bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition"
+                              >
+                                Descargar imagen
+                              </button>
+                              {selectedClient.generatedVideoBase64 && selectedClient.generatedVideoMimeType && (
+                                <button
+                                  onClick={() => handleDownload(
+                                    buildDataUrl(selectedClient.generatedVideoBase64, selectedClient.generatedVideoMimeType),
+                                    `${buildFileSlug(selectedClient.formData.clientName)}-show.mp4`
+                                  )}
+                                  className="flex-1 min-w-[150px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-semibold py-2 px-4 rounded-lg text-sm transition"
+                                >
+                                  Descargar video
+                                </button>
+                              )}
+                            </div>
                         </div>
                         <div>
                             <h3 className="text-xl font-semibold mb-4 text-white">Información</h3>

@@ -49,4 +49,6 @@ export interface ClientRecord {
   createdAt: string;
   formData: FormData;
   generatedImageUrl: string;
+  generatedVideoBase64?: string;
+  generatedVideoMimeType?: string;
 }
