@@ -9,6 +9,7 @@ export enum EventType {
 
 export type VideoStyle = 'magical' | 'energetic' | 'professional' | 'romantic' | 'dramatic' | 'playful';
 export type AnimationSpeed = 'slow' | 'medium' | 'fast' | 'dynamic';
+export type MusicStyle = 'Cinematic' | 'Rock' | 'Electronic' | 'Classical' | 'Pop' | 'Jazz' | 'Ambient';
 
 export interface VideoConfig {
   style: VideoStyle;
@@ -30,7 +31,9 @@ export interface FormData {
   droneCount: string;
   elements: string;
   notes: string;
+  musicStyle: MusicStyle;
   hasTransition?: boolean;
+  transitionElements?: string;
   transitionDescription?: string;
 }
 

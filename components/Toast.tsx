@@ -42,33 +42,33 @@ const Toast: React.FC<ToastProps> = ({ message, type, onClose, duration = 4000 }
   const getColors = () => {
     switch (type) {
       case 'success':
-        return 'bg-green-600 border-green-500 text-green-50';
+        return 'bg-neutral-900 border-green-500/50 text-green-400';
       case 'error':
-        return 'bg-red-600 border-red-500 text-red-50';
+        return 'bg-neutral-900 border-red-500/50 text-red-400';
       case 'info':
-        return 'bg-blue-600 border-blue-500 text-blue-50';
+        return 'bg-neutral-900 border-blue-500/50 text-blue-400';
     }
   };
 
   return (
-    <div className={`fixed top-4 right-4 z-[100] ${getColors()} border-2 rounded-lg shadow-2xl px-6 py-4 min-w-[300px] max-w-md animate-slide-in-right`}>
+    <div className={`fixed top-4 right-4 z-[100] ${getColors()} border rounded-lg shadow-lg px-4 py-3 min-w-[300px] max-w-md animate-slide-in-right`}>
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 mt-0.5">
           {getIcon()}
         </div>
         <div className="flex-1">
-          <p className="font-semibold text-sm leading-relaxed">{message}</p>
+          <p className="font-medium text-sm leading-relaxed text-neutral-200">{message}</p>
         </div>
-        <button onClick={onClose} className="flex-shrink-0 ml-2 hover:opacity-70 transition">
-          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+        <button onClick={onClose} className="flex-shrink-0 ml-2 text-neutral-500 hover:text-white transition">
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
         </button>
       </div>
 
       {/* Progress bar */}
-      <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/20 rounded-b-lg overflow-hidden">
-        <div className="h-full bg-white/60 animate-progress" style={{ animationDuration: `${duration}ms` }}></div>
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-neutral-800 rounded-b-lg overflow-hidden">
+        <div className={`h-full animate-progress ${type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-blue-500'}`} style={{ animationDuration: `${duration}ms` }}></div>
       </div>
 
       <style dangerouslySetInnerHTML={{ __html: `

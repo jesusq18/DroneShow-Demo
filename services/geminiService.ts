@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { EventType, VideoConfig, VideoStyle, AnimationSpeed } from "../types";
+import { EventType, VideoConfig, VideoStyle, AnimationSpeed, MusicStyle } from "../types";
 
 // Usar API key del archivo .env.local para inicialización por defecto
 // En la app, se usa AI Studio para seleccionar la clave interactivamente
@@ -186,212 +186,61 @@ const generateDroneShowVideoPrompt = (
     includeParticles: boolean,
     includeTrails: boolean,
     cameraMovement: string,
-    transitionDescription?: string
+    transitionDescription?: string,
+    musicStyle?: MusicStyle
 ): string => {
-    // Contexto del negocio: empresa de espectáculos de drones
+    // Contexto simplificado
     const businessContext = `
-CONTEXTO DE LA EMPRESA:
-Somos una empresa profesional especializada en espectáculos aéreos con drones de precisión y luces LED.
-Nuestros shows están diseñados para impactar, sorprender y crear momentos memorables.
-La imagen proporcionada es el marco visual donde ocurrirá el espectáculo.
-
-INFORMACIÓN DEL EVENTO ACTUAL:
-- Tipo de evento: ${eventType}
-- Ubicación: ${location}
-- Cantidad de drones: ${droneCount}
-- Elementos/Figuras a realizar: ${elements}
-- Estilo visual: ${style}
-- Ritmo: ${speed}
-- Intensidad de efectos: ${effectsIntensity}
+CONTEXTO: Show de drones profesional con luces LED.
+UBICACIÓN: ${location}
+ELEMENTOS: ${elements}
+CANTIDAD: ${droneCount} drones
 `;
 
-    const transitionNarrative = transitionDescription
-    ? `
-TRANSICIÓN SOLICITADA POR EL CLIENTE:
-- Los mismos drones ejecutan la siguiente transición coreografiada: ${transitionDescription}
-- NO aparecen aviones, fuegos artificiales ni polvo mágico.
-- El enfoque es sobrio, realista y basado únicamente en reorganizaciones de drones y cambios de color controlados.`
-    : `
-TRANSICIONES:
-- Los drones solo se reorganizan entre formaciones manteniendo un ritmo sobrio y preciso.
-- Nunca se agregan objetos externos ni efectos fantásticos.`;
-
     const speedDescriptions = {
-        'slow': 'lento, pausado y elegante',
-        'medium': 'ritmo equilibrado y natural',
-        'fast': 'rápido, dinámico y electrizante',
-        'dynamic': 'alternando ritmos: secciones rápidas explosivas con momentos lentos dramáticos',
+        'slow': 'lento y elegante',
+        'medium': 'ritmo natural',
+        'fast': 'rápido y dinámico',
+        'dynamic': 'variable',
     };
 
-    const styleDetails = {
-        'magical': 'mágico, etéreo y onírico, como si fuera un sueño hecho realidad',
-        'energetic': 'energético, vibrante y cargado de adrenalina',
-        'professional': 'profesional, limpio, sofisticado y ejecutado con precisión quirúrgica',
-        'romantic': 'romántico, delicado, emotivo y lleno de sensibilidad',
-        'dramatic': 'dramático, impactante, con tensiones y liberaciones emocionales',
-        'playful': 'lúdico, creativo, divertido y sorprendente',
-    };
+    // Instrucción de audiencia obligatoria
+    const audienceInstruction = `
+AUDIENCIA (OBLIGATORIO):
+- SIEMPRE incluir un grupo de personas en la parte inferior del video observando el show.
+- Las personas deben verse de espaldas o perfil, mirando hacia el cielo con asombro.
+- Esto es crucial para dar escala y realismo a la escena.
+`;
 
-    const effectsIntensityDetails = {
-        'subtle': 'minimalista con efectos sutiles y refinados',
-        'moderate': 'balanceado con efectos visibles pero controlados',
-        'intense': 'explosivo con máximos efectos visuales y saturación de luz',
-    };
+    // Prompt simplificado sin lógica de eventos compleja
+    const eventPrompt = `Show de drones formando ${elements}. Movimiento ${speedDescriptions[speed]}.`;
 
-    const particlesDescription = includeParticles 
-        ? 'Los drones emiten partículas de luz, polvo brillante, y reflejos que crean un efecto envolvente.'
-        : '';
-    
-    const trailsDescription = includeTrails 
-        ? 'Cada movimiento de drone deja estelas de luz persistentes que trazan su trayectoria en el aire, creando líneas de luz continuas.'
-        : '';
-    
-    const cameraDescription = cameraMovement === 'static' 
-        ? 'La perspectiva es fija, permitiendo ver la composición completa del espectáculo.'
-        : cameraMovement === 'gentle' 
-        ? 'La cámara se mueve suavemente, como si siguiera el ritmo de la música o la acción, pero manteniendo el contexto visible.'
-        : 'La cámara es dinámica y sigue la acción, creando un efecto cinematográfico profesional con movimientos que potencian el drama.';
+    const transitionNarrative = transitionDescription
+    ? `TRANSICIÓN: Los drones se reorganizan para formar: ${transitionDescription}.`
+    : `Los drones mantienen la formación o cambian suavemente.`;
 
-    // Prompt específico según tipo de evento
-    let eventPrompt = '';
-    
-    switch (eventType) {
-        case EventType.Boda:
-            eventPrompt = `
-BODA - ESPECTÁCULO DE DRONES ROMÁNTICO:
-Crea un video animado donde ${droneCount} drones coreografían un show romántico formando: ${elements}
-Estilo: ${styleDetails['romantic']}
-Los drones se mueven ${speedDescriptions[speed]} creando composiciones románticas y elegantes.
-Paleta de colores: dorados, rosas suaves, blancos puros y azules celestes.
-Efecto visual: ${effectsIntensityDetails[effectsIntensity]}
-La atmósfera debe ser mágica, celebratoria y profundamente emotiva.
-Cada movimiento debe parecer coreografiado al ritmo del amor y la celebración.`;
-            break;
+    const musicInstruction = musicStyle 
+    ? `RITMO: Los drones se mueven al ritmo de música estilo ${musicStyle}.` 
+    : '';
 
-        case EventType.Concierto:
-            eventPrompt = `
-CONCIERTO - ESPECTÁCULO ENERGÉTICO Y SINCRONIZADO:
-Anima ${droneCount} drones en un show explosivo donde forman: ${elements}
-Estilo: ${styleDetails['energetic']}
-Los movimientos son ${speedDescriptions[speed]}, sincronizados con ritmo y energía visual.
-Paleta de colores: neón vibrante, multicolor, purpuras, azules y rosas intensas.
-Efecto visual: ${effectsIntensityDetails[effectsIntensity]}
-La energía es contagiosa, cada formación es más impactante que la anterior.
-Los drones se mueven con precisión militar pero con soul artístico.`;
-            break;
-
-        case EventType.Corporativo:
-            eventPrompt = `
-EVENTO CORPORATIVO - ESPECTÁCULO PROFESIONAL Y PRECISIÓN:
-Anima ${droneCount} drones ejecutando un show corporativo donde forman: ${elements}
-Estilo: ${styleDetails['professional']}
-Los movimientos son ${speedDescriptions[speed]}, controlados y ejecutados con precisión absoluta.
-Paleta de colores: azul corporativo, gris, plateado y tonos profesionales que reflejen autoridad.
-Efecto visual: ${effectsIntensityDetails[effectsIntensity]}
-Cada transición es perfecta, cada formación impacta con sofisticación.
-El resultado transmite profesionalismo, innovación y control total.`;
-            break;
-
-        case EventType.Festival:
-            eventPrompt = `
-FESTIVAL - ESPECTÁCULO COLORIDO Y DIVERTIDO:
-Anima ${droneCount} drones en un show desenfadado y creativo donde forman: ${elements}
-Estilo: ${styleDetails['playful']}
-Los movimientos son ${speedDescriptions[speed]}, inesperados y llenos de giros creativos.
-Paleta de colores: multicolor explosivo - púrpura, verde neón, amarillo brillante, rosa chicle, azul eléctrico.
-Efecto visual: ${effectsIntensityDetails[effectsIntensity]}
-La atmósfera es alegre, sorprendente y altamente visual para redes sociales.
-Los drones crean caos ordenado, diversión controlada y momentos inolvidables.`;
-            break;
-
-        case EventType.Politica:
-            eventPrompt = `
-EVENTO POLÍTICO - ESPECTÁCULO DRAMÁTICO E IMPACTANTE:
-Anima ${droneCount} drones en un show impactante donde forman: ${elements}
-Estilo: ${styleDetails['dramatic']}
-Los movimientos son ${speedDescriptions[speed]}, con momentos de tensión dramática seguidos de liberación emotiva.
-Paleta de colores: rojo intenso, blanco puro y azul profundo, con efectos de luz estudiados.
-Efecto visual: ${effectsIntensityDetails[effectsIntensity]}
-El impacto emocional y visual es el objetivo principal.
-Las formaciones son imponentes, memorables y cargadas de significado.`;
-            break;
-
-        default:
-            eventPrompt = `
-Anima ${droneCount} drones en un espectáculo donde forman: ${elements}
-Estilo visual: ${styleDetails[style]}
-Movimiento: ${speedDescriptions[speed]}
-Efecto visual: ${effectsIntensityDetails[effectsIntensity]}`;
-    }
-
-    // Prompt final combinado
-    const finalPrompt = `${businessContext}
+    // Prompt final limpio
+    return `${businessContext}
 
 ${eventPrompt}
 
+${audienceInstruction}
+
 ${transitionNarrative}
 
-TONO REALISTA Y SOBRIO:
-- El show debe sentirse documental y profesional, sin magia ni fantasía exagerada.
-- ÚNICAMENTE se muestran drones LED; prohíbese cualquier otro vehículo aéreo o elemento físico.
-- No existe polvo mágico, glitter ni humo artificial: la luz proviene solo de los drones.
-- Las reorganizaciones son fluidas y creíbles, como en un espectáculo real grabado en tiempo real.
+${musicInstruction}
 
-INSTRUCCIONES TÉCNICAS DE ANIMACIÓN:
-- La imagen de referencia muestra el lugar exacto donde ocurrirá el espectáculo. Respeta la ubicación y el contexto visual.
-- Los elementos a animar son: "${elements}" - Anima EXACTAMENTE esto, asegúrate de que sea claramente reconocible.
-- Número de drones: ${droneCount} - Muestra aproximadamente esta cantidad en pantalla.
-- ${cameraDescription}
-- ${particlesDescription}
-- ${trailsDescription}
-
-DETALLES VISUALES FINALES:
-- Las luces LED de los drones deben parpadear, brillar y cambiar de color de manera natural y coordinada.
-- Las transiciones entre formaciones deben ser suaves pero definitivas, nunca abruptas.
-- Sincroniza el movimiento con el ritmo (musical si es aplicable).
-- Calidad: cinematográfica, profesional, digna de un evento de alto nivel.
-- Duración: 15-30 segundos maximizando impacto visual.
-- Los drones mantienen formaciones limpias y reconocibles en todo momento.
-- El efecto final debe ser: "wow" - impactante, memorable y profesional.
-
-RESTRICCIONES CRÍTICAS - LEER CUIDADOSAMENTE:
-❌ NO INCLUIR:
-- Fuegos artificiales reales o pirotecnia
-- Explosiones físicas de ningún tipo
-- Aviones, jets, helicópteros o cualquier aeronave
-- Polvo mágico, glitter, confeti, humo de colores o partículas fantásticas
-- Láser beams o rayos de luz externos
-- Shows de luces adicionales (reflectores, spotlights, strobes)
-- Efectos de humo, niebla o fuego
-- Cualquier elemento lumínico que NO sean los drones LED
-
-✅ SOLO MOSTRAR:
-- Drones con luces LED (puntos de luz en el cielo)
-- Estelas/rastros de luz dejados por los drones (si aplica)
-- Reflejos naturales de las luces LED en superficies (agua, edificios)
-- Partículas de luz emanadas de los drones (si aplica)
-
-VELOCIDAD Y MOVIMIENTO:
-- Los movimientos deben ser LENTOS, CONTROLADOS y FLUIDOS
-- NO acelerados, NO rápidos, NO bruscos
-- Ritmo pausado y elegante, como un ballet aéreo
-- Las transiciones entre formaciones toman su tiempo (3-5 segundos mínimo)
-- Cada movimiento es deliberado y grácil
-- Los drones se mueven sincronizados pero a velocidad humana perceptible
-- Evitar movimientos que parezcan "timelapse" o video acelerado
-
-INTERPRETACIÓN DE NARRATIVAS Y TRANSICIONES ESPECIALES:
-Si los elementos incluyen frases, preguntas o anuncios (ej: "Boy or Girl?", "It's a girl!", "Yes/No", "Countdown 3-2-1!"):
-- Entiende que NO son palabras que deben formarse literalmente con los drones.
-- Son NARRATIVAS que deben representarse con TRANSICIONES VISUALES y CAMBIOS DE COLOR.
-- Ejemplo 1: "Boy or Girl?" → Primer acto: Drones azules formando un símbolo/forma genérica. Segundo acto: Transición explosiva. Tercer acto: Drones ROSAS formando celebración visual con "It's a girl!!!" como descripción del momento emocional.
-- Ejemplo 2: "Countdown 3-2-1!" → Tres fases: Los drones se reorganizan rápidamente, luces parpadeantes intensas, y culminan en una explosión visual masiva.
-- Las transiciones deben ser DRAMÁTICAS y EMOCIONALMENTE SIGNIFICATIVAS.
-- Usa CAMBIOS DE COLOR RADICALES para enfatizar los momentos importantes.
-- La narrativa debe ser CLARA VISUALMENTE aunque no se lean palabras reales.
-- Cada fase de la transición debe durar aproximadamente 2-4 segundos dependiendo del ritmo elegido.`;
-
-    return finalPrompt;
+INSTRUCCIONES DE CALIDAD:
+- Video fotorrealista y cinematográfico.
+- SOLO drones LED (puntos de luz).
+- NO humo, NO fuego, NO polvo, NO confeti, NO aviones.
+- Imagen limpia y nítida.
+- Las luces de los drones parpadean naturalmente.
+`;
 };
 
 /**
@@ -407,81 +256,21 @@ const generateTransitionPrompt = (
     speed: AnimationSpeed,
     effectsIntensity: string
 ): string => {
-    const speedMap = {
-        'slow': 'lento y pausado',
-        'medium': 'ritmo equilibrado',
-        'fast': 'rápido y dinámico',
-        'dynamic': 'alternando entre lento y explosivo',
-    };
-
-    const safeFirstDescription = firstImageDescription || 'Describe con precisión la primera escena según la imagen de referencia inicial.';
-    const safeSecondDescription = secondImageDescription || 'Describe claramente la segunda escena final según la imagen de referencia proporcionada.';
-    const safeTransitionDescription = transitionDescription || 'Los mismos drones cambian de color y se reorganizan lentamente en el aire.';
-
     return `
-TRANSICIÓN DE DRONES - SECUENCIA EN DOS ACTOS:
+TRANSICIÓN DE DRONES:
 
-CONTEXTO:
-- Tienes DOS imágenes de referencia
-- SON LOS MISMOS DRONES que protagonizan ambas imágenes
-- NO desaparecen ni aparecen nuevos drones
-- Solo cambian de color y se reorganizan
-- El tono es sobrio, realista y profesional. Nunca agregues aviones, helicópteros ni polvo mágico.
+ESCENA 1: ${firstImageDescription}
+ESCENA 2: ${secondImageDescription}
+ACCIÓN: ${transitionDescription}
 
-ACTO 1: PRIMERA IMAGEN
-${safeFirstDescription}
-Los drones forman: ${elements}
-Aproximadamente ${droneCount} drones crean esta formación inicial.
+AUDIENCIA (OBLIGATORIO):
+- Incluir personas observando el show desde abajo en todo momento.
 
-TRANSICIÓN (EL MOMENTO MÁGICO):
-${safeTransitionDescription}
-- Los drones NO desaparecen, se reorganizan
-- Cambian de color de manera dramática y coordinada
-- Se mueven con ritmo ${speedMap[speed]}
-- Intensidad de efectos: ${effectsIntensity}
-- Destellos controlados y cambios de color sutiles son el punto focal (sin pirotecnia ni polvo)
-- Duración de la transición: 3-5 segundos máximo
-
-ACTO 2: SEGUNDA IMAGEN
-Después de la transición espectacular, los MISMOS drones forman la nueva configuración:
-${safeSecondDescription}
-- Mantienen el color/patrón de luz de la transición
-- Se posicionan en la nueva formación
-- La cámara revelan la belleza de la nueva composición
-
-DETALLES CRÍTICOS:
-- CONTINUIDAD: Son visiblemente los mismos drones en todo momento
-- TRANSFORMACIÓN: El cambio de forma/color es el espectáculo principal
-- DURACIÓN TOTAL: 20-35 segundos (10-15s acto 1, 3-5s transición, 10-15s acto 2)
-- ENERGÍA: La transición es el momento de máximo impacto emocional
-- CLARIDAD: Ambas formaciones deben ser claramente reconocibles
-- CINEMATOGRAFÍA: Transiciones suaves en actos, pero la reorganización es dramática
-
-RESTRICCIONES CRÍTICAS - SOLO DRONES:
-❌ NO INCLUIR EN EL VIDEO:
-- Fuegos artificiales, pirotecnia o explosiones reales
-- Aviones, jets, helicópteros u otros objetos voladores
-- Polvo mágico, glitter, confeti o humo de colores
-- Láser beams, rayos de luz externos o efectos de iluminación escénica
-- Shows de luces adicionales (reflectores, strobes, spotlights)
-- Efectos de humo, niebla, fuego o partículas que no provengan de los drones
-- Cualquier elemento lumínico externo que no sea un drone LED
-
-✅ SOLO PERMITIDO:
-- Drones con luces LED (puntos luminosos individuales)
-- Estelas de luz dejadas por los drones en movimiento
-- Reflejos naturales de las luces LED
-- Cambios de color en los LEDs de los drones
-
-VELOCIDAD Y MOVIMIENTO (MUY IMPORTANTE):
-- Los movimientos deben ser LENTOS, PAUSADOS y CONTROLADOS
-- NO acelerados, NO rápidos, NO movimientos bruscos
-- Ritmo LENTO y elegante durante todo el video
-- Las transiciones toman su tiempo: 3-5 segundos MÍNIMO
-- Cada movimiento es deliberado, suave y observable
-- Los drones se mueven sincronizados pero a velocidad LENTA y perceptible
-- NUNCA movimientos que parezcan timelapse o video acelerado
-- Durante la transición: reorganización PAUSADA aunque visualmente impactante
+INSTRUCCIONES:
+- Video realista.
+- Los mismos drones se reorganizan.
+- NO humo, NO efectos mágicos.
+- Movimiento ${speed}.
 `;
 };
 
@@ -556,7 +345,8 @@ export const generateVideo = async (
     videoConfig?: VideoConfig,
     secondImageData?: { base64: string; mimeType: string } | null,
     transitionDescription?: string,
-    sceneDescriptions?: { first?: string; second?: string }
+    sceneDescriptions?: { first?: string; second?: string },
+    musicStyle?: MusicStyle
 ): Promise<string> => {
     // Usar la instancia de AI con la clave correcta (ya sea de .env o AI Studio)
     const videoAI = getAIInstance();
@@ -604,10 +394,11 @@ export const generateVideo = async (
                 finalConfig.includeParticles,
                 finalConfig.includeTrails,
                 finalConfig.cameraMovement,
-                transitionDescription
+                transitionDescription,
+                musicStyle
             );
         } else {
-            videoPrompt = 'Animate this drone show, making the lights twinkle and move smoothly across the sky, creating a magical and dynamic visual.';
+            videoPrompt = 'Animate this drone show. Include people watching from below. No smoke, no fire, just LED drones.';
         }
 
         // Negative prompt para evitar artefactos comunes y elementos no deseados

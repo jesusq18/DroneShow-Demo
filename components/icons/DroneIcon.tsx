@@ -14,17 +14,15 @@ const DroneIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     strokeLinejoin="round"
     {...props}
   >
-    <path d="M12 18a.969.969 0 0 0 .969-.969V12" />
-    <path d="M12 6.01V6" />
-    <path d="m18.36 12 .01.01" />
-    <path d="m5.64 12 .01.01" />
-    <path d="M12 12h.01" />
-    <path d="M18.36 5.64.01.01" />
-    <path d="m5.64 18.36 .01.01" />
-    <path d="m18.36 18.36-.01-.01" />
-    <path d="m5.64 5.64-.01-.01" />
-    <path d="M22 12c0 4-8 4-8 4s-8 0-8-4 8-10 8-10 8 6 8 10Z" />
-    <path d="M2 12c0 4 8 4 8 4s8 0 8-4-8-10-8-10S2 8 2 12Z" />
+    <rect width="10" height="10" x="7" y="7" rx="2" />
+    <path d="m7 7-3-3" />
+    <path d="m17 7 3-3" />
+    <path d="m7 17-3 3" />
+    <path d="m17 17 3 3" />
+    <path d="M2 2h4" />
+    <path d="M18 2h4" />
+    <path d="M2 22h4" />
+    <path d="M18 22h4" />
   </svg>
 );
 
